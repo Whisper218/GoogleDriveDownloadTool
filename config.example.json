@@ -1,0 +1,16 @@
+{
+  "excel": null,
+  "csv": null,
+  "sheet": null,
+  "column": "Missing_File",
+  "remote": "gdrive",
+  "proxy": "",
+  "folder_id": "REPLACE_WITH_FOLDER_ID",
+  "batch_size": 100,
+  "attempts": 3,
+  "retry_delay_seconds": 10,
+  "buffer_size": "8Mi",
+  "max_buffer_memory": "32Mi",
+  "bandwidth_limit": "off",
+  "rclone": "tools/rclone.exe"
+}

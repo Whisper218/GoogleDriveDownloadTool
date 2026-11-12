@@ -1,0 +1,20 @@
+.venv/
+tools/
+download/
+download_state/
+__pycache__/
+*.pyc
+
+# Local configuration and data: never publish account names, folder IDs or downloads.
+config.json
+*.xlsx
+*.xls
+*.csv
+*.zip
+提示词.txt
+网址.txt
+ICESat2_Global/
+
+# Temporary test workspaces.
+tests/tmp*/
+.pytest_cache/
