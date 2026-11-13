@@ -52,11 +52,30 @@ def safe_name(value):
     return name
 
 
-def read_excel(cfg):
-    from openpyxl import load_workbook
-    source = Path(cfg["excel"])
+def config_path(value, label):
+    """Accept plain paths, plus accidental Python/JSON literal forms pasted into config.json."""
+    text = str(value).strip()
+    for _ in range(2):
+        if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'":
+            text = text[1:-1].strip()
+        if len(text) > 1 and text[0] in "rR" and text[1] in "\"'":
+            text = text[1:]
+    text = text.strip().strip("\"'").strip()
+    if not text:
+        raise ValueError(f"{label} 路径为空")
+    source = Path(text)
     if not source.is_absolute():
         source = BASE / source
+    if not source.is_file():
+        raise ValueError(f"找不到 {label} 文件：{source}。请检查 config.json 的路径（Windows 反斜杠需写成 \\\\）。")
+    return source
+
+
+def read_excel(cfg):
+    from openpyxl import load_workbook
+    source = config_path(cfg["excel"], "Excel")
+    if source.suffix.lower() not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
+        raise ValueError(f"Excel 仅支持 .xlsx/.xlsm/.xltx/.xltm，当前为 {source.suffix or '无扩展名'}：{source.name}")
     with contextlib.closing(load_workbook(source, read_only=True, data_only=True)) as book:
         sheet = book[cfg["sheet"]] if cfg.get("sheet") else book.active
         rows = iter(sheet.iter_rows(values_only=True))
@@ -81,9 +100,7 @@ def read_excel(cfg):
 
 
 def read_csv(cfg):
-    source = Path(cfg["csv"])
-    if not source.is_absolute():
-        source = BASE / source
+    source = config_path(cfg["csv"], "CSV")
     with source.open(encoding="utf-8-sig", newline="") as stream:
         rows = csv.DictReader(stream)
         if not rows.fieldnames or rows.fieldnames.count(cfg["column"]) != 1:
@@ -247,6 +264,22 @@ def select_batch_size(state, cfg, input_fn):
     state['batch_size_selected_for'] = index
     persist(state)
     return True
+
+
+def archive_task():
+    """Retire the active task: keep its progress record, refuse if local files remain."""
+    if not STATE.exists():
+        raise ValueError("当前没有活动任务进度，无需归档。")
+    state = json.loads(STATE.read_text(encoding="utf-8"))
+    reject_links(DOWNLOAD)
+    leftover = sorted(DOWNLOAD.iterdir()) if DOWNLOAD.exists() else []
+    if leftover:
+        raise ValueError(f"download 目录仍有 {len(leftover)} 项内容（例如 {leftover[0].name}）。"
+                         "请先备份或移走，再归档旧任务。")
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    target = CONTROL / f"progress.archived.{stamp}.json"
+    os.replace(STATE, target)
+    return state, target
 
 
 def load_state(cfg, names):
@@ -629,9 +662,17 @@ def main():
     parser.add_argument("--configure", action="store_true", help="使用项目代理进行 rclone 交互授权配置")
     parser.add_argument("--reconnect", action="store_true", help="使用项目代理重新授权现有连接")
     parser.add_argument("--defer-failures", action="store_true", help="保存失败清单并暂缓失败文件；仍需手工确认本批删除后才继续")
+    parser.add_argument("--new-task", action="store_true", help="归档当前任务进度（不删本地文件），以便用新名单重新开始")
     args = parser.parse_args()
     try:
         cfg = load_config(args)
+        if args.new_task:
+            archived, path = archive_task()
+            print(f"已归档旧任务：进度 {len(archived['files'])} 个文件、已下载 {len(archived['downloaded'])} 个、"
+                  f"批次 {archived['batch_index'] + 1}/{len(batch_ranges(archived))}。")
+            print(f"旧进度另存为：{path}")
+            print("本地文件未被删除。现在重新运行 start_download.bat 即可按新名单开始新任务。")
+            return 0
         url = args.url or (ask("请输入 Google Drive 文件夹网址（直接回车使用配置中的 folder_id）：")
                            if sys.stdin.isatty() and not args.plan and not args.configure and not args.reconnect else "")
         if url:

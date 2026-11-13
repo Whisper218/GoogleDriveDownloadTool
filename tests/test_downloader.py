@@ -172,6 +172,23 @@ class DownloaderTests(unittest.TestCase):
         loaded = app.load_state(dict(self.cfg, batch_size=500), self.names)
         self.assertEqual(app.batch_bounds(loaded), [0, 2])
 
+    def test_archive_task_keeps_progress_and_requires_empty_download(self):
+        state = app.load_state(self.cfg, self.names)
+        folder = app.batch_directory(state)
+        (folder / 'a.tif').write_bytes(b'x')
+        with self.assertRaises(ValueError):
+            app.archive_task()
+        self.assertTrue(app.STATE.exists())
+        (folder / 'a.tif').unlink()
+        (folder / '.batch-owner.json').unlink()
+        folder.rmdir()
+        archived, path = app.archive_task()
+        self.assertEqual(archived['files'], self.names)
+        self.assertFalse(app.STATE.exists())
+        self.assertTrue(path.is_file())
+        fresh = app.load_state(self.cfg, ['x.tif'])
+        self.assertEqual(fresh['files'], ['x.tif'])
+
     def test_missing_config_falls_back_to_example(self):
         example = dict(self.cfg, proxy='', excel=None, csv=None, folder_id='REPLACE_WITH_FOLDER_ID',
                        attempts=3, retry_delay_seconds=10)

@@ -85,6 +85,18 @@ rclone 的凭据保存在它自己的用户配置文件中。不要把该文件�
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+## 换一个新的下载名单（新任务）
+
+程序按来源文件和名单锁定任务，防止旧进度套用到新清单。要改用另一份 Excel/CSV 清单，先归档当前任务：
+
+```powershell
+.\start_download.bat --new-task
+```
+
+它会把 `download_state\progress.json` 另存为 `progress.archived.<时间>.json`，不删除任何已下载文件。若 `download` 目录仍有文件，程序会拒绝归档，请先备份或移走。归档成功后修改 `config.json` 的 `excel` 或 `csv`，再运行 `start_download.bat` 即开始新任务。
+
+`config.json` 里的路径要写普通字符串，例如 `"E:\\files\\data\\list.xlsx"`。不要写成 Python 的 `r"..."` 形式；程序会尝试自动去掉多余引号，但仍以正确写法为准。
+
 ## 中断恢复和失败处理
 
 ### Google 授权换取令牌超时
